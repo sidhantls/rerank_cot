@@ -103,7 +103,7 @@ def compute_logits_traditional(inputs, model, token_true_id, token_false_id, bat
     return scores
 
 @torch.no_grad()
-def compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token_false_id):
+def compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token_false_id, batch_size=8):
     reasoning_suffix = "<|im_end|>\n<|im_start|>assistant\nReasoning: "
     reasoning_suffix_tokens = tokenizer.encode(reasoning_suffix, add_special_tokens=False)
 
@@ -111,16 +111,24 @@ def compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token
     for key in inputs:
         reasoning_inputs[key] = inputs[key].clone()
 
-    # Generate reasoning (stopping before "Final Answer:")
-    with torch.no_grad():
-        reasoning_outputs = model.generate(
-            **reasoning_inputs,
-            max_new_tokens=150,
-            do_sample=False,
-            pad_token_id=tokenizer.eos_token_id,
-            temperature=0.1,
-            # stop_strings is not a standard argument, so we skip it here
-        )
+    input_ids = reasoning_inputs['input_ids']
+    attention_mask = reasoning_inputs.get('attention_mask', None)
+    num_samples = input_ids.size(0)
+    reasoning_outputs = []
+    for start in range(0, num_samples, batch_size):
+        end = min(start + batch_size, num_samples)
+        batch = {'input_ids': input_ids[start:end]}
+        if attention_mask is not None:
+            batch['attention_mask'] = attention_mask[start:end]
+        with torch.no_grad():
+            batch_outputs = model.generate(
+                **batch,
+                max_new_tokens=70,
+                do_sample=False,
+                pad_token_id=tokenizer.eos_token_id,
+                temperature=0.1,
+            )
+        reasoning_outputs.extend(batch_outputs)
 
     final_answer_prefix = "\n\nFinal Answer: "
     final_inputs = []
@@ -178,7 +186,7 @@ def predict_with_reasoning(query, documents, model, tokenizer, use_v2_prefix=Fal
     inputs = process_inputs(pairs, tokenizer, model, prefix_tokens, suffix_tokens, max_length=8192)
     # For compute_logits_traditional, pass batch_size as argument
     # prob_scores = compute_logits_traditional(inputs, model, token_true_id, token_false_id, batch_size=batch_size)
-    prob_scores, reasonings = compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token_false_id)
+    prob_scores, reasonings = compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token_false_id, batch_size=batch_size)
     return prob_scores, reasonings
 
 if __name__ == "__main__":
