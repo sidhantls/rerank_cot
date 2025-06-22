@@ -1,4 +1,4 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, DynamicCache
 import torch
 import time
 
@@ -126,7 +126,7 @@ def compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token
                 max_new_tokens=70,
                 do_sample=False,
                 pad_token_id=tokenizer.eos_token_id,
-                temperature=0.1,
+                past_key_values = DynamicCache()
             )
         reasoning_outputs.extend(batch_outputs)
 
@@ -168,22 +168,31 @@ def compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token
     }
 
     with torch.no_grad():
-        outputs = model(**batch_inputs)
-        logits = outputs.logits[:, -1, :]
-        yes_logits = logits[:, token_true_id]
-        no_logits = logits[:, token_false_id]
-        yes_no_logits = torch.stack([no_logits, yes_logits], dim=1)
-        probabilities = torch.nn.functional.softmax(yes_no_logits, dim=1)
-        yes_probabilities = probabilities[:, 1].cpu().tolist()
+        for start in range(0, batch_inputs['input_ids'].size(0), batch_size):
+            end = min(start + batch_size, batch_inputs['input_ids'].size(0))
+            batch = {
+                'input_ids': batch_inputs['input_ids'][start:end],
+                'attention_mask': batch_inputs['attention_mask'][start:end]
+            }
+            outputs = model(**batch)
+            logits = outputs.logits[:, -1, :]
+            yes_logits = logits[:, token_true_id]
+            no_logits = logits[:, token_false_id]
+            yes_no_logits = torch.stack([no_logits, yes_logits], dim=1)
+            probabilities = torch.nn.functional.softmax(yes_no_logits, dim=1)
+            if start == 0:
+                yes_probabilities = probabilities[:, 1].cpu().tolist()
+            else:
+                yes_probabilities.extend(probabilities[:, 1].cpu().tolist())
 
     return yes_probabilities, reasonings
 
-def predict_with_reasoning(query, documents, model, tokenizer, use_v2_prefix=False, batch_size=8):
+def predict_with_reasoning(query, documents, model, tokenizer, use_v2_prefix=False, batch_size=8, max_length=512*2):
     token_false_id, token_true_id = get_token_ids(tokenizer)
     prefix, suffix, prefix_tokens, suffix_tokens = build_prefix_and_suffix(tokenizer, use_v2_prefix=use_v2_prefix)
     task = 'Given a web search query, retrieve relevant passages that answer the query'
     pairs = [format_instruction(task, query, doc) for doc in documents]
-    inputs = process_inputs(pairs, tokenizer, model, prefix_tokens, suffix_tokens, max_length=8192)
+    inputs = process_inputs(pairs, tokenizer, model, prefix_tokens, suffix_tokens, max_length=max_length)
     # For compute_logits_traditional, pass batch_size as argument
     # prob_scores = compute_logits_traditional(inputs, model, token_true_id, token_false_id, batch_size=batch_size)
     prob_scores, reasonings = compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token_false_id, batch_size=batch_size)
