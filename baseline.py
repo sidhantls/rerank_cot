@@ -1,10 +1,10 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-def load_model_and_tokenizer(model_name="Qwen/Qwen3-Reranker-8B"):
+def load_model_and_tokenizer(model_name):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
-    model = AutoModelForCausalLM.from_pretrained(model_name).to(device).eval()
+    model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16).to(device).eval()
     return model, tokenizer, device
 
 def get_special_tokens(tokenizer):
@@ -34,30 +34,40 @@ def process_inputs(pairs, tokenizer, max_length, prefix_tokens, suffix_tokens, m
     for i, ele in enumerate(inputs['input_ids']):
         inputs['input_ids'][i] = prefix_tokens + ele + suffix_tokens
     inputs = tokenizer.pad(inputs, padding=True, return_tensors="pt", max_length=max_length)
-    device = model.device if hasattr(model, 'device') else torch.device('cpu')
-    for key in inputs:
-        inputs[key] = inputs[key].to(device)
     return inputs
 
 @torch.no_grad()
 def compute_logits(inputs, model, token_true_id, token_false_id):
-    batch_scores = model(**inputs).logits[:, -1, :]
+    device = model.device if hasattr(model, 'device') else torch.device('cpu')
+    for key in inputs:
+        inputs[key] = inputs[key].to(device)
+
+    with torch.no_grad():
+        batch_scores = model(**inputs).logits[:, -1, :]
+
     true_vector = batch_scores[:, token_true_id]
     false_vector = batch_scores[:, token_false_id]
     batch_scores = torch.stack([false_vector, true_vector], dim=1)
-    batch_scores = torch.nn.functional.log_softmax(batch_scores, dim=1)
+    batch_scores = torch.nn.functional.log_softmax(batch_scores, dim=1).detach().cpu()
     scores = batch_scores[:, 1].exp().tolist()
+
+    del inputs 
+    del batch_scores
+    torch.cuda.empty_cache()
     return scores
 
-def predict(query, documents, model, tokenizer, max_length=512):
+def predict(query, documents, model, tokenizer, max_length=512, batch_size=8):
     task = 'Given a web search query, retrieve relevant passages that answer the query'
-    pairs = [format_instruction(task, query, doc) for doc in documents]
     prefix_tokens, suffix_tokens = get_special_tokens(tokenizer)
     token_false_id, token_true_id = get_token_ids(tokenizer)
-    inputs = process_inputs(pairs, tokenizer, max_length, prefix_tokens, suffix_tokens, model)
-    scores = compute_logits(inputs, model, token_true_id, token_false_id)
+    scores = []
+    for i in range(0, len(documents), batch_size):
+        batch_docs = documents[i:i+batch_size]
+        pairs = [format_instruction(task, query, doc) for doc in batch_docs]
+        inputs = process_inputs(pairs, tokenizer, max_length, prefix_tokens, suffix_tokens, model)
+        batch_scores = compute_logits(inputs, model, token_true_id, token_false_id)
+        scores.extend(batch_scores)
     return scores
-
 
 if __name__ == "__main__":
     # Requires transformers>=4.51.0
@@ -75,8 +85,9 @@ if __name__ == "__main__":
         "Gravity is a force that attracts two bodies towards each other. It gives weight to physical objects and is responsible for the movement of planets around the sun.",
     ]
 
+    batch_size = 2  # Example batch size
     for query in queries:
-        scores = predict(query, documents, model, tokenizer)
+        scores = predict(query, documents, model, tokenizer, batch_size=batch_size)
         for i, doc in enumerate(documents):
             print(f"Query: {query}")
             print(f"Document: {doc}")
