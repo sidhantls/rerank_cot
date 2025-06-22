@@ -83,13 +83,23 @@ def process_inputs(pairs, tokenizer, model, prefix_tokens, suffix_tokens, max_le
     return inputs
 
 @torch.no_grad()
-def compute_logits_traditional(inputs, model, token_true_id, token_false_id):
-    batch_scores = model(**inputs).logits[:, -1, :]
-    true_vector = batch_scores[:, token_true_id]
-    false_vector = batch_scores[:, token_false_id]
-    batch_scores = torch.stack([false_vector, true_vector], dim=1)
-    batch_scores = torch.nn.functional.log_softmax(batch_scores, dim=1)
-    scores = batch_scores[:, 1].exp().tolist()
+def compute_logits_traditional(inputs, model, token_true_id, token_false_id, batch_size=8):
+    input_ids = inputs['input_ids']
+    # If attention_mask exists, use it
+    attention_mask = inputs.get('attention_mask', None)
+    num_samples = input_ids.size(0)
+    scores = []
+    for start in range(0, num_samples, batch_size):
+        end = min(start + batch_size, num_samples)
+        batch = {'input_ids': input_ids[start:end]}
+        if attention_mask is not None:
+            batch['attention_mask'] = attention_mask[start:end]
+        batch_scores = model(**batch).logits[:, -1, :]
+        true_vector = batch_scores[:, token_true_id]
+        false_vector = batch_scores[:, token_false_id]
+        batch_scores = torch.stack([false_vector, true_vector], dim=1)
+        batch_scores = torch.nn.functional.log_softmax(batch_scores, dim=1)
+        scores.extend(batch_scores[:, 1].exp().tolist())
     return scores
 
 @torch.no_grad()
@@ -160,12 +170,14 @@ def compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token
 
     return yes_probabilities, reasonings
 
-def predict_with_reasoning(query, documents, model, tokenizer, use_v2_prefix=False):
+def predict_with_reasoning(query, documents, model, tokenizer, use_v2_prefix=False, batch_size=8):
     token_false_id, token_true_id = get_token_ids(tokenizer)
     prefix, suffix, prefix_tokens, suffix_tokens = build_prefix_and_suffix(tokenizer, use_v2_prefix=use_v2_prefix)
     task = 'Given a web search query, retrieve relevant passages that answer the query'
     pairs = [format_instruction(task, query, doc) for doc in documents]
     inputs = process_inputs(pairs, tokenizer, model, prefix_tokens, suffix_tokens, max_length=8192)
+    # For compute_logits_traditional, pass batch_size as argument
+    # prob_scores = compute_logits_traditional(inputs, model, token_true_id, token_false_id, batch_size=batch_size)
     prob_scores, reasonings = compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token_false_id)
     return prob_scores, reasonings
 
