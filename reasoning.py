@@ -188,7 +188,7 @@ def compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token
     return yes_probabilities, reasonings
 
 @torch.no_grad()
-def compute_scores_with_reasoning_v2(inputs, model, tokenizer, documents, max_length=512, batch_size=8):
+def compute_scores_with_reasoning_v2(query, inputs, model, tokenizer, documents, max_length=512, batch_size=8):
     # Create empty logs file
     with open('logs.txt', 'w') as f:
         pass
@@ -271,7 +271,7 @@ def predict_with_reasoning(query, documents, model, tokenizer, use_v2_prefix=Fal
     # For compute_logits_traditional, pass batch_size as argument
     # prob_scores = compute_logits_traditional(inputs, model, token_true_id, token_false_id, batch_size=batch_size)
     # prob_scores, reasonings = compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token_false_id, batch_size=batch_size)
-    prob_scores, reasonings = compute_scores_with_reasoning_v2(inputs, model, tokenizer, documents, max_length=max_length, batch_size=batch_size)
+    prob_scores, reasonings = compute_scores_with_reasoning_v2(query, inputs, model, tokenizer, documents, max_length=max_length, batch_size=batch_size)
     return prob_scores, reasonings
 
 if __name__ == "__main__":
