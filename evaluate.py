@@ -90,7 +90,7 @@ def evaluate_reranker(args):
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side='left')
     model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float16, attn_implementation="sdpa")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device).eval()
 
     # Limit samples if specified
