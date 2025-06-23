@@ -38,8 +38,6 @@ This section compares two re-ranking approaches: the baseline approach that dire
 
 **Experiment 1: Reasoning-based Re-ranking**
 
-**Dataset**: scidocs (get the dataset name from the evaluate.py)
-
 **Results**:
 | Metric | With Reasoning | Baseline |
 |--------|---------------|----------|
