@@ -63,7 +63,11 @@ Reasoning: The query asks specifically for Tokyo's population, and the document 
 Final Answer: yes
 
 ..
-
 """
+```
+
+Default prefix:
+```
+prefix = "<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be \"yes\" or \"no\".<|im_end|>\n<|im_start|>user\n"
 ```
 
