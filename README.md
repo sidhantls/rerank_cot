@@ -1,6 +1,6 @@
 # rerank_cot
 
-A document re-ranking evaluation framework that compares baseline and reasoning-based approaches using the Qwen Re-ranker model.
+A document re-ranking evaluation framework that explores whether reasoning tokens can improve re-ranking performance. The framework compares a baseline approach against a chain-of-thought (CoT) enhanced version that prompts the Qwen Re-ranker model to first analyze query-document similarity before making relevance predictions. The motivation is that explicit reasoning steps could help the model make more informed and accurate re-ranking decisions, similar to how CoT has improved performance on other language tasks.
 
 ## Overview
 
