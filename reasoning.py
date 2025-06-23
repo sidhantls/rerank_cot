@@ -187,6 +187,81 @@ def compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token
 
     return yes_probabilities, reasonings
 
+@torch.no_grad()
+def compute_scores_with_reasoning_v2(inputs, model, tokenizer, documents, max_length=512, batch_size=8):
+    # Create empty logs file
+    with open('logs.txt', 'w') as f:
+        pass
+    reasoning_suffix = "<|im_end|>\n<|im_start|>assistant\nReasoning: "
+    reasoning_suffix_tokens = tokenizer.encode(reasoning_suffix, add_special_tokens=False)
+
+    reasoning_inputs = {}
+    for key in inputs:
+        reasoning_inputs[key] = inputs[key].clone()
+
+    input_ids = reasoning_inputs['input_ids']
+    attention_mask = reasoning_inputs.get('attention_mask', None)
+    num_samples = input_ids.size(0)
+    reasoning_outputs = []
+    for start in range(0, num_samples, batch_size):
+        end = min(start + batch_size, num_samples)
+        batch = {'input_ids': input_ids[start:end]}
+        if attention_mask is not None:
+            batch['attention_mask'] = attention_mask[start:end]
+        with torch.no_grad():
+            batch_outputs = model.generate(
+                **batch,
+                max_new_tokens=50,
+                do_sample=False,
+                pad_token_id=tokenizer.eos_token_id,
+            )
+        reasoning_outputs.extend(batch_outputs)
+
+    for i, reasoning_output in enumerate(reasoning_outputs):
+        generated_reasoning = tokenizer.decode(
+            reasoning_output[len(inputs['input_ids'][i]):],
+            skip_special_tokens=True
+        )
+
+        # Check if yes/no appears in the first 5 characters and replace it
+        first_5_chars = generated_reasoning[:5].lower()
+        if 'yes' in first_5_chars or 'no' in first_5_chars:
+            # Remove yes/no from the first 5 characters (case-insensitive)
+            first_5_cleaned = generated_reasoning[:5].replace('yes', '').replace('no', '').replace('Yes', '').replace('No', '')
+            generated_reasoning = first_5_cleaned + generated_reasoning[5:]
+
+        documents[i] = documents[i] + " Reasoning: " + generated_reasoning + "\n"
+
+    # Append first 5 documents with their reasoning to logs.txt
+    with open('logs.txt', 'a') as f:
+        for i, doc in enumerate(documents[:2]):
+            f.write(f"Document {i+1}:\n{doc}\n\n")
+
+    yes_probabilities = predict(query, documents, model, tokenizer, max_length=512, batch_size=8)
+    return yes_probabilities, reasonings
+
+import baseline
+def predict(query, documents, model, tokenizer, max_length=512, batch_size=8):
+    def get_special_tokens(tokenizer):
+        # Modified to include reasoning
+        prefix = "<|im_start|>system\nJudge whether the Document meets the requirements based on the Query, Reasoning, and the Instruct provided. Note that the answer can only be \"yes\" or \"no\".<|im_end|>\n<|im_start|>user\n"
+        suffix = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+        prefix_tokens = tokenizer.encode(prefix, add_special_tokens=False)
+        suffix_tokens = tokenizer.encode(suffix, add_special_tokens=False)
+        return prefix_tokens, suffix_tokens
+
+    task = 'Given a web search query, retrieve relevant passages that answer the query'
+    prefix_tokens, suffix_tokens = baseline.get_special_tokens(tokenizer)
+    token_false_id, token_true_id = baseline.get_token_ids(tokenizer)
+    scores = []
+    for i in range(0, len(documents), batch_size):
+        batch_docs = documents[i:i+batch_size]
+        pairs = [baseline.format_instruction(task, query, doc) for doc in batch_docs]
+        inputs = baseline.process_inputs(pairs, tokenizer, max_length, prefix_tokens, suffix_tokens, model)
+        batch_scores = baseline.compute_logits(inputs, model, token_true_id, token_false_id)
+        scores.extend(batch_scores)
+    return scores
+
 def predict_with_reasoning(query, documents, model, tokenizer, use_v2_prefix=False, batch_size=8, max_length=512*2):
     token_false_id, token_true_id = get_token_ids(tokenizer)
     prefix, suffix, prefix_tokens, suffix_tokens = build_prefix_and_suffix(tokenizer, use_v2_prefix=use_v2_prefix)
@@ -195,7 +270,8 @@ def predict_with_reasoning(query, documents, model, tokenizer, use_v2_prefix=Fal
     inputs = process_inputs(pairs, tokenizer, model, prefix_tokens, suffix_tokens, max_length=max_length)
     # For compute_logits_traditional, pass batch_size as argument
     # prob_scores = compute_logits_traditional(inputs, model, token_true_id, token_false_id, batch_size=batch_size)
-    prob_scores, reasonings = compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token_false_id, batch_size=batch_size)
+    # prob_scores, reasonings = compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token_false_id, batch_size=batch_size)
+    prob_scores, reasonings = compute_scores_with_reasoning_v2(inputs, model, tokenizer, documents, max_length=max_length, batch_size=batch_size)
     return prob_scores, reasonings
 
 if __name__ == "__main__":
