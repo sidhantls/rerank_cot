@@ -217,6 +217,7 @@ def compute_scores_with_reasoning_v2(query, inputs, model, tokenizer, documents,
             )
         reasoning_outputs.extend(batch_outputs)
 
+    reasoning_text = []
     for i, reasoning_output in enumerate(reasoning_outputs):
         generated_reasoning = tokenizer.decode(
             reasoning_output[len(inputs['input_ids'][i]):],
@@ -231,6 +232,7 @@ def compute_scores_with_reasoning_v2(query, inputs, model, tokenizer, documents,
             generated_reasoning = first_5_cleaned + generated_reasoning[5:]
 
         documents[i] = documents[i] + " Reasoning: " + generated_reasoning + "\n"
+        reasoning_text.append(generated_reasoning)
 
     # Append first 5 documents with their reasoning to logs.txt
     with open('logs.txt', 'a') as f:
@@ -238,7 +240,7 @@ def compute_scores_with_reasoning_v2(query, inputs, model, tokenizer, documents,
             f.write(f"Document {i+1}:\n{doc}\n\n")
 
     yes_probabilities = predict(query, documents, model, tokenizer, max_length=512, batch_size=8)
-    return yes_probabilities, reasonings
+    return yes_probabilities, reasoning_text
 
 import baseline
 def predict(query, documents, model, tokenizer, max_length=512, batch_size=8):
