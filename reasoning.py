@@ -26,7 +26,7 @@ Final Answer: yes<|im_end|>
 
 # Improved prompt with reasoning examples and instructions
 prefix_v2 = """<|im_start|>system
-Judge whether the Document meets the requirements based on the Query and the Instruct provided. First, provide a detailed reasoning about the similarity between the query and document, analyzing both semantic overlap and information completeness. Then reflect on your reasoning to ensure accuracy. Finally, provide your answer as \"yes\" or \"no\".
+Judge whether the Document meets the requirements based on the Query and the Instruct provided. First, provide a detailed reasoning about the similarity between the query and document, analyzing both semantic overlap and information completeness. Then reflect on your reasoning to ensure accuracy. Finally, provide your answer as "yes" or "no".
 
 Examples:
 
@@ -49,7 +49,8 @@ Query: "Best restaurants in Paris"
 Document: "The weather in Tokyo today is sunny with a temperature of 25 degrees Celsius and light winds from the east."
 Reasoning: The query seeks restaurant recommendations in Paris, while the document provides weather information for Tokyo. These topics are completely unrelated - different cities, different information types (dining vs. weather). There's no semantic overlap whatsoever. The document cannot help answer the query in any meaningful way. Reflecting on this analysis, this is clearly a complete mismatch with no relevance between query and document content.
 Final Answer: no<|im_end|>
-<|im_start|>user\n"""
+<|im_start|>user
+"""
 
 def get_token_ids(tokenizer):
     token_false_id = tokenizer.convert_tokens_to_ids("no")
