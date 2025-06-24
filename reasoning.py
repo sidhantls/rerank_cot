@@ -190,8 +190,7 @@ def compute_scores_with_reasoning(inputs, model, tokenizer, token_true_id, token
 @torch.no_grad()
 def compute_scores_with_reasoning_v2(query, inputs, model, tokenizer, documents, max_length=512, batch_size=8):
     # Create empty logs file
-    with open('logs.txt', 'w') as f:
-        pass
+
     reasoning_suffix = "<|im_end|>\n<|im_start|>assistant\nReasoning: "
     reasoning_suffix_tokens = tokenizer.encode(reasoning_suffix, add_special_tokens=False)
 
@@ -224,13 +223,7 @@ def compute_scores_with_reasoning_v2(query, inputs, model, tokenizer, documents,
             skip_special_tokens=True
         )
 
-        # Check if yes/no appears in the first 5 characters and replace it
-        first_5_chars = generated_reasoning[:5].lower()
-        if 'yes' in first_5_chars or 'no' in first_5_chars:
-            # Remove yes/no from the first 5 characters (case-insensitive)
-            first_5_cleaned = generated_reasoning[:5].replace('yes', '').replace('no', '').replace('Yes', '').replace('No', '')
-            generated_reasoning = first_5_cleaned + generated_reasoning[5:]
-
+        generated_reasoning = generated_reasoning.split("Final Answer:")[0].strip()
         documents[i] = documents[i] + " Reasoning: " + generated_reasoning + "\n"
         reasoning_text.append(generated_reasoning)
 
