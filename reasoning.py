@@ -42,7 +42,7 @@ Final Answer: yes
 
 Query: "What is machine learning?"
 Document: "Artificial intelligence has revolutionized many industries in recent years, with applications ranging from autonomous vehicles to medical diagnosis systems."
-Reasoning: The query asks for a definition or explanation of machine learning, while the document discusses AI applications in various industries. Although machine learning is a subset of AI, there's limited semantic overlap - the document doesn't define or explain machine learning specifically. The document talks about AI broadly but doesn't address the core question about what machine learning is. Upon reflection, while related topics, this document doesn't provide the definitional information the query seeks.
+Reasoning: The query asks for a definition or explanation of machine learning, while the document discusses AI applications in various industries. Although machine learning is a subset of AI, there's limited semantic overlap - the document doesn't define or explain machine learning specifically. The document talks about AI broadly but doesn't address the core question about what machine learning is.
 Final Answer: no
 
 Query: "Best restaurants in Paris"
@@ -210,9 +210,12 @@ def compute_scores_with_reasoning_v2(query, inputs, model, tokenizer, documents,
         with torch.no_grad():
             batch_outputs = model.generate(
                 **batch,
-                max_new_tokens=25,
-                do_sample=False,
+                max_new_tokens=30,
+                do_sample=True,
+                temperature=0.5,
                 pad_token_id=tokenizer.eos_token_id,
+                no_repeat_ngram_size=3,
+                early_stopping=True
             )
         reasoning_outputs.extend(batch_outputs)
 
@@ -240,7 +243,8 @@ import baseline
 def predict(query, documents, model, tokenizer, max_length=512, batch_size=8):
     def get_special_tokens(tokenizer):
         # Modified to include reasoning
-        prefix = "<|im_start|>system\nJudge whether the Document meets the requirements based on the Query, Reasoning, and the Instruct provided. Note that the answer can only be \"yes\" or \"no\".<|im_end|>\n<|im_start|>user\n"
+        # prefix = "<|im_start|>system\nJudge whether the Document meets the requirements based on the Query, Reasoning, and the Instruct provided. Note that the answer can only be \"yes\" or \"no\".<|im_end|>\n<|im_start|>user\n"
+        # default prefix
         prefix = "<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be \"yes\" or \"no\".<|im_end|>\n<|im_start|>user\n"
         suffix = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
 
