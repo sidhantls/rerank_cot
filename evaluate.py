@@ -33,17 +33,38 @@ Standardize the filenames you use: model_name (after the "/"). and the either ba
 
 
 def parse_args():
-    class Args:
-        def __init__(self):
-            self.dataset = "jinaai/hotpotqa-reranking-en"
-            self.reranker = "reasoning"
-            self.model = "Qwen/Qwen3-Reranker-0.6B"
-            self.batch_size = 8 
-            self.max_samples = 500 # max samples to evaluate on
-            self.max_length = 512 # max length of the input tokens
+    # class Args:
+    #     def __init__(self):
+    #         self.dataset = "jinaai/hotpotqa-reranking-en"
+    #         self.reranker = "reasoning"
+    #         self.model = "Qwen/Qwen3-Reranker-0.6B"
+    #         self.batch_size = 8 
+    #         self.max_samples = 500 # max samples to evaluate on
+    #         self.max_length = 512 # max length of the input tokens
+    #         self.use_v2_prefix = True
 
-    args = Args()
-    return  args
+    # args = Args()
+    # return args
+
+    parser = argparse.ArgumentParser(description="Evaluate re-ranker performance")
+    parser.add_argument("--dataset", type=str, default="jinaai/hotpotqa-reranking-en",
+                       choices=["jinaai/hotpotqa-reranking-en"],
+                       help="Dataset to evaluate on")
+    parser.add_argument("--reranker", type=str, default="baseline", choices=["baseline", "reasoning"],
+                       help="Type of re-ranker to use")
+    parser.add_argument("--model", type=str, default="Qwen/Qwen3-Reranker-0.6B",
+                       help="Model to use for re-ranking")
+    parser.add_argument("--batch_size", type=int, default=8,
+                       help="Batch size for processing")
+    parser.add_argument("--max_samples", type=int, default=500,
+                       help="Maximum number of samples to evaluate on")
+    parser.add_argument("--max_length", type=int, default=512,
+                       help="Maximum length of input tokens")
+    parser.add_argument("--use_v2_prefix", action="store_true", default=False,
+                       help="Whether to use v2 prefix for reasoning re-ranker")
+    
+    args = parser.parse_args()
+    return args
 
 def calculate_top_k_accuracy(scores: List[float], positive_count: int, ks: List[int] = [1, 3, 5]) -> Dict[str, float]:
     """Calculate top-k accuracy for different k values"""
@@ -124,7 +145,7 @@ def evaluate_reranker(args):
             scores, reasonings = predict_with_reasoning(query, all_docs, model, tokenizer,
                                                         batch_size=args.batch_size,
                                                         max_length=args.max_length,
-                                                        use_v2_prefix=True)
+                                                        use_v2_prefix=args.use_v2_prefix)
 
         # Create log entries for this sample
         for doc_idx, (doc, score, reasoning) in enumerate(zip(all_docs, scores, reasonings)):
