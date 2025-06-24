@@ -210,7 +210,7 @@ def compute_scores_with_reasoning_v2(query, inputs, model, tokenizer, documents,
         with torch.no_grad():
             batch_outputs = model.generate(
                 **batch,
-                max_new_tokens=50,
+                max_new_tokens=25,
                 do_sample=False,
                 pad_token_id=tokenizer.eos_token_id,
             )
@@ -233,6 +233,7 @@ def compute_scores_with_reasoning_v2(query, inputs, model, tokenizer, documents,
             f.write(f"Document {i+1}:\n{doc}\n\n")
 
     yes_probabilities = predict(query, documents, model, tokenizer, max_length=512, batch_size=8)
+
     return yes_probabilities, reasoning_text
 
 import baseline
@@ -240,7 +241,9 @@ def predict(query, documents, model, tokenizer, max_length=512, batch_size=8):
     def get_special_tokens(tokenizer):
         # Modified to include reasoning
         prefix = "<|im_start|>system\nJudge whether the Document meets the requirements based on the Query, Reasoning, and the Instruct provided. Note that the answer can only be \"yes\" or \"no\".<|im_end|>\n<|im_start|>user\n"
+        prefix = "<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be \"yes\" or \"no\".<|im_end|>\n<|im_start|>user\n"
         suffix = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+
         prefix_tokens = tokenizer.encode(prefix, add_special_tokens=False)
         suffix_tokens = tokenizer.encode(suffix, add_special_tokens=False)
         return prefix_tokens, suffix_tokens
