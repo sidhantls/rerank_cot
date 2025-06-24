@@ -123,7 +123,8 @@ def evaluate_reranker(args):
         else:  # reasoning
             scores, reasonings = predict_with_reasoning(query, all_docs, model, tokenizer,
                                                         batch_size=args.batch_size,
-                                                        max_length=args.max_length)
+                                                        max_length=args.max_length,
+                                                        use_v2_prefix=True)
 
         # Create log entries for this sample
         for doc_idx, (doc, score, reasoning) in enumerate(zip(all_docs, scores, reasonings)):
